@@ -36,7 +36,7 @@ const RECONNECT_DELAY_MS = 5000
 const DEFAULT_SYNC_POLL_INTERVAL_SECONDS = 60
 
 const DEFAULT_DELIVERY_MESSAGE =
-  '请访问网页输入邮箱和订单号进行自助激活：https://team.example.com/redeem/xianyu'
+  '请访问网页输入您的邮箱和兑换码（{{orderId}}）进行自助激活：https://team.example.com/redeem/xianyu'
 
 const ORDER_STATUS_MESSAGES = [
   '[我已拍下，待付款]',
@@ -80,6 +80,34 @@ function sanitizeLogText(value, maxLen = 120) {
   const raw = value == null ? '' : String(value)
   const trimmed = raw.length > maxLen ? `${raw.slice(0, maxLen)}…` : raw
   return trimmed.replace(/[\r\n\t]+/g, ' ')
+}
+
+function formatDeliveryMessage(template, orderId) {
+  const normalizedOrderId = normalizeXianyuOrderId(orderId)
+  const rawTemplate = String(template || '').trim() || DEFAULT_DELIVERY_MESSAGE
+
+  if (!normalizedOrderId) return rawTemplate
+
+  let message = rawTemplate
+    .replace(/\{\{\s*orderId\s*\}\}/g, normalizedOrderId)
+    .replace(/\{\{\s*order_id\s*\}\}/g, normalizedOrderId)
+    .replace(/\$\{\s*orderId\s*\}/g, normalizedOrderId)
+    .replace(/\$\{\s*order_id\s*\}/g, normalizedOrderId)
+    .replace(/（用户实际的下单订单号）/g, `（${normalizedOrderId}）`)
+
+  if (message === rawTemplate) {
+    if (message.includes('兑换码')) {
+      message = message.replace('兑换码', `兑换码（${normalizedOrderId}）`)
+    } else if (message.includes('数字订单号')) {
+      message = message.replace('数字订单号', `数字订单号（${normalizedOrderId}）`)
+    } else if (message.includes('订单号')) {
+      message = message.replace('订单号', `订单号（${normalizedOrderId}）`)
+    } else {
+      message = `${message}（订单号：${normalizedOrderId}）`
+    }
+  }
+
+  return message
 }
 
 function generateMid() {
@@ -726,7 +754,10 @@ async function handleOrderEvent(orderId, chatId, content) {
       return
     }
 
-    const deliveryMessage = String(process.env.XIANYU_WS_DELIVERY_MESSAGE || DEFAULT_DELIVERY_MESSAGE)
+    const deliveryMessage = formatDeliveryMessage(
+      process.env.XIANYU_WS_DELIVERY_MESSAGE || DEFAULT_DELIVERY_MESSAGE,
+      normalizedOrderId
+    )
 
     if (isDryRunEnabled()) {
       lastImSkipAt = new Date().toISOString()
