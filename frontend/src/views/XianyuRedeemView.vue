@@ -30,13 +30,13 @@
             >
               <AppleInput
                 v-model.trim="formData.email"
-                label="邮箱地址"
+                label="您的账号邮箱地址"
                 placeholder="name@example.com"
                 type="email"
                 variant="filled"
                 :disabled="isLoading"
-                helperText="请输入你用来登录ChatGPT的邮箱"
-                :error="formData.email && !isValidEmail ? '请输入有效的邮箱格式' : ''"
+                helperText="请输入用于接收 ChatGPT 邀请的账号邮箱地址"
+                :error="formData.email && !isValidEmail ? '请输入有效的账号邮箱地址' : ''"
                 class="transition-all duration-300 group-hover:translate-x-1"
               />
             </div>
@@ -47,13 +47,13 @@
             >
               <AppleInput
                 v-model="formData.orderId"
-                label="闲鱼订单号"
-                placeholder="请输入数字订单号"
+                label="您的兑换码"
+                placeholder="请输入您的兑换码激活"
                 type="text"
                 variant="filled"
                 :disabled="isLoading"
-                helperText="订单号可在闲鱼订单详情中查看（通常为纯数字）"
-                :error="formData.orderId && !isValidOrderId ? '订单号格式不正确，请输入纯数字订单号' : ''"
+                helperText="您的兑换码即闲鱼自动回复时发送的兑换码"
+                :error="formData.orderId && !isValidOrderId ? '兑换码格式不正确，请输入纯数字兑换码' : ''"
                 @input="handleOrderInput"
                 class="transition-all duration-300 group-hover:translate-x-1"
               />
@@ -89,7 +89,7 @@
                   <p>系统已完成兑换并将您加入 ChatGPT Team 账号。</p>
                   <div class="space-y-1">
                     <p class="text-[13px]">
-                      <span class="text-[#86868b]">账号邮箱：</span>
+                      <span class="text-[#86868b]">您的账号邮箱地址：</span>
                       <span class="font-medium">{{ successInfo.accountEmail }}</span>
                     </p>
                     <p class="text-[13px]">
@@ -108,10 +108,10 @@
                   </div>
                   <p class="text-[13px] leading-normal text-[#86868b]">
                     <template v-if="successInfo.inviteStatus && successInfo.inviteStatus.includes('已发送')">
-                      请留意邮箱邀请，接受后即可登录使用。
+                      请留意发送到您的账号邮箱地址的邀请邮件，接受后即可登录使用。
                     </template>
                     <template v-else>
-                      如未收到自动邀请，请联系管理员协助添加。
+                      如未收到自动邀请，请联系管理员并提供您的账号邮箱地址。
                     </template>
                   </p>
                   <div class="pt-1">
@@ -156,7 +156,7 @@
               </li>
               <li class="flex items-start gap-3">
                 <span class="h-1.5 w-1.5 rounded-full bg-[#0A84FF] mt-2 flex-shrink-0"></span>
-                <span>兑换失败/未收到邀请邮件，请直接发送邮箱给客服处理（请不要发截图哦～）</span>
+                <span>兑换失败/未收到邀请邮件，请直接发送您的账号邮箱地址给客服处理（请不要发截图哦～）</span>
               </li>
               <li class="flex items-start gap-3">
                 <span class="h-1.5 w-1.5 rounded-full bg-[#0A84FF] mt-2 flex-shrink-0"></span>
@@ -207,13 +207,44 @@ const submitButtonLabel = computed(() => {
     return '立即兑换'
   }
   if (loadingStage.value === 'check') {
-    return '正在查询订单...'
+    return '正在核验兑换码...'
   }
   if (loadingStage.value === 'sync') {
-    return '正在同步订单...'
+    return '正在同步兑换信息...'
   }
   return '正在兑换...'
 })
+
+const normalizeXianyuUserMessage = (message: string) => {
+  const normalized = message.trim()
+  if (!normalized) {
+    return '兑换失败，请稍后再试'
+  }
+
+  const specialMappings: Array<[RegExp, string]> = [
+    [/订单详情解析失败，请确认订单号是否正确/g, '兑换码解析失败，请确认兑换码是否正确'],
+    [/未找到对应订单，请确认订单号是否正确/g, '未找到对应兑换信息，请确认兑换码是否正确'],
+    [/未找到对应订单，请稍后再试/g, '未找到对应兑换信息，请稍后再试'],
+    [/查询订单失败，请稍后再试/g, '核验兑换码失败，请稍后再试'],
+    [/请输入有效的闲鱼订单号/g, '请输入有效的兑换码'],
+    [/请输入闲鱼订单号/g, '请输入您的兑换码'],
+    [/请输入邮箱地址/g, '请输入您的账号邮箱地址'],
+    [/请输入有效的邮箱地址/g, '请输入有效的账号邮箱地址']
+  ]
+
+  let userMessage = normalized
+  for (const [pattern, replacement] of specialMappings) {
+    userMessage = userMessage.replace(pattern, replacement)
+  }
+
+  return userMessage
+    .replace(/数字订单号/g, '兑换码')
+    .replace(/闲鱼订单号/g, '兑换码')
+    .replace(/对应订单/g, '对应兑换信息')
+    .replace(/订单号格式不正确/g, '兑换码格式不正确')
+    .replace(/订单号是否正确/g, '兑换码是否正确')
+    .replace(/订单号/g, '兑换码')
+}
 
 const handleOrderInput = (value: string | Event) => {
   let input = ''
@@ -233,22 +264,22 @@ const handleRedeem = async () => {
   const normalizedOrderId = formData.value.orderId.trim()
 
   if (!normalizedEmail) {
-    errorMessage.value = '请输入邮箱地址'
+    errorMessage.value = '请输入您的账号邮箱地址'
     return
   }
 
   if (!isValidEmail.value) {
-    errorMessage.value = '请输入有效的邮箱地址'
+    errorMessage.value = '请输入有效的账号邮箱地址'
     return
   }
 
   if (!normalizedOrderId) {
-    errorMessage.value = '请输入闲鱼订单号'
+    errorMessage.value = '请输入您的兑换码'
     return
   }
 
   if (!isValidOrderId.value) {
-    errorMessage.value = '订单号格式不正确，请检查后重试'
+    errorMessage.value = '兑换码格式不正确，请检查后重试'
     return
   }
 
@@ -271,7 +302,7 @@ const handleRedeem = async () => {
       })
       orderExists = Boolean(verifyResponse.data?.order)
       if (!orderExists) {
-        throw new Error('未找到对应订单，请确认订单号是否正确')
+        throw new Error('未找到对应兑换信息，请确认兑换码是否正确')
       }
     }
 
@@ -297,14 +328,15 @@ const handleRedeem = async () => {
       error?.response?.data?.message ||
       error?.message ||
       ''
-    const message = typeof raw === 'string' && raw.trim() ? raw : '兑换失败，请稍后再试'
+    const rawMessage = typeof raw === 'string' && raw.trim() ? raw : '兑换失败，请稍后再试'
+    const message = normalizeXianyuUserMessage(rawMessage)
 
     const shouldContactSupport =
       errorCode === 'xianyu_codes_not_configured' ||
       errorCode === 'xianyu_no_today_codes' ||
       errorCode === 'xianyu_today_codes_exhausted' ||
       errorCode === 'xianyu_codes_unavailable' ||
-      (status === 503 && message.includes('闲鱼') && message.includes('兑换码') && message.includes('今日'))
+      (status === 503 && rawMessage.includes('闲鱼') && rawMessage.includes('兑换码') && rawMessage.includes('今日'))
 
     errorMessage.value = shouldContactSupport ? '暂无可用兑换码，请联系管理员补货' : message
   } finally {
